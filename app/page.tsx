@@ -30,8 +30,8 @@ export default function Home() {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
-              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
-                <Link href="/about">Learn More</Link>
+              <Button size="lg" variant="outline" className="bg-white text-[#4F46E5] hover:bg-white/90">
+                <Link href="/about" className="z-10">Learn More</Link>
               </Button>
             </div>
           </div>
@@ -189,7 +189,7 @@ export default function Home() {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
-              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
+              <Button size="lg" variant="outline" className="bg-white text-[#4F46E5] hover:bg-white/90">
                 <Link href="/contact">Contact Us</Link>
               </Button>
             </div>
