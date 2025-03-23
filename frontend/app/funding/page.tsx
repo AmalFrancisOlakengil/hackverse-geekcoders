@@ -8,12 +8,16 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ArrowRight, Search, Filter, DollarSign, Calendar, Users, Globe, Award } from "lucide-react";
-import { ref, get } from "firebase/database";
-import { database } from "@/lib/firebase";
+import { ref, get, set } from "firebase/database";
+import { database, auth } from "@/lib/firebase";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 export default function FundingPage() {
   const [fundingOpportunities, setFundingOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedFunding, setSelectedFunding] = useState(null);
+  const [userProjects, setUserProjects] = useState([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   // Fetch funding opportunities from Firebase
   useEffect(() => {
@@ -28,32 +32,89 @@ export default function FundingPage() {
 
           // Loop through each user and collect their funding opportunities
           Object.keys(users).forEach((userId) => {
-            const userFunding = users[userId].funding; // Get funding for the current user
+            const userFunding = users[userId].funding;
             if (userFunding) {
               Object.keys(userFunding).forEach((fundingId) => {
                 const funding = userFunding[fundingId];
                 allFunding.push({
                   id: fundingId,
                   userId,
-                  ...funding, // Spread funding data
+                  ...funding,
                 });
               });
             }
           });
 
-          setFundingOpportunities(allFunding); // Set funding opportunities in state
+          setFundingOpportunities(allFunding);
         } else {
           console.log("No funding opportunities found in Firebase.");
         }
       } catch (error) {
         console.error("Error fetching funding opportunities:", error);
       } finally {
-        setLoading(false); // Set loading to false
+        setLoading(false);
       }
     };
 
     fetchFundingOpportunities();
   }, []);
+
+  // Fetch user projects
+  const fetchUserProjects = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      const userProjectsRef = ref(database, `users/${user.uid}/projects`);
+      const snapshot = await get(userProjectsRef);
+
+      if (snapshot.exists()) {
+        const projectsData = snapshot.val();
+        const projectsArray = Object.entries(projectsData).map(([id, data]) => ({
+          id,
+          ...data,
+        }));
+        setUserProjects(projectsArray);
+      }
+    } catch (error) {
+      console.error("Error fetching user projects:", error);
+    }
+  };
+
+  // Handle Apply button click
+  const handleApplyClick = (funding) => {
+    setSelectedFunding(funding);
+    fetchUserProjects();
+    setIsDialogOpen(true);
+  };
+
+  // Handle project selection
+  const handleProjectSelect = async (projectId) => {
+    if (!selectedFunding) return;
+
+    try {
+      const fundingRef = ref(database, `users/${selectedFunding.userId}/funding/${selectedFunding.id}`);
+      const fundingSnapshot = await get(fundingRef);
+
+      if (fundingSnapshot.exists()) {
+        const fundingData = fundingSnapshot.val();
+        const appliedProjects = fundingData.appliedProjects || [];
+
+        if (!appliedProjects.includes(projectId)) {
+          appliedProjects.push(projectId);
+          await set(fundingRef, { ...fundingData, appliedProjects });
+          alert("Project applied successfully!");
+        } else {
+          alert("This project has already been applied for this funding.");
+        }
+      }
+
+      setIsDialogOpen(false);
+    } catch (error) {
+      console.error("Error applying for funding:", error);
+      alert("Failed to apply for funding. Please try again.");
+    }
+  };
 
   if (loading) {
     return (
@@ -65,6 +126,7 @@ export default function FundingPage() {
 
   return (
     <div className="container py-8">
+      {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold font-heading">Funding Marketplace</h1>
@@ -72,6 +134,7 @@ export default function FundingPage() {
             Discover grants, scholarships, and funding opportunities for your research
           </p>
         </div>
+        {/* Add Funding Button */}
         <Button asChild>
           <Link href="/post-funding">
             <DollarSign className="h-4 w-4 mr-2" />
@@ -132,7 +195,9 @@ export default function FundingPage() {
                     </div>
                   </CardContent>
                   <CardFooter>
-                    <Button className="w-full">View Details</Button>
+                    <Button className="w-full" onClick={() => handleApplyClick(funding)}>
+                      Apply
+                    </Button>
                   </CardFooter>
                 </Card>
               ))}
@@ -194,6 +259,35 @@ export default function FundingPage() {
           </div>
         </div>
       </section>
+
+      {/* Dialog for Project Selection */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select a Project to Apply</DialogTitle>
+            <DialogDescription>
+              Choose one of your projects to apply for this funding opportunity.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {userProjects.map((project) => (
+              <div
+                key={project.id}
+                className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
+                onClick={() => handleProjectSelect(project.id)}
+              >
+                <div>
+                  <h3 className="font-medium">{project.title}</h3>
+                  <p className="text-sm text-muted-foreground">{project.description}</p>
+                </div>
+                <Button variant="outline" size="sm">
+                  Select
+                </Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

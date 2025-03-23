@@ -43,6 +43,57 @@ export default function DashboardPage() {
     fundingSecured: 0,
     messages: 0
   })
+  const [userFunding, setUserFunding] = useState([]);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+  
+      try {
+        // Fetch user projects
+        const userProjectsRef = ref(database, `users/${user.uid}/projects`);
+        const projectsSnapshot = await get(userProjectsRef);
+  
+        if (projectsSnapshot.exists()) {
+          const projectsData = projectsSnapshot.val();
+          const projectsArray = Object.entries(projectsData).map(([id, data]) => ({
+            id,
+            ...data,
+          }));
+          setUserProjects(projectsArray);
+  
+          // Calculate stats
+          const totalCollaborators = projectsArray.reduce((acc, proj) => acc + (proj.numCollaborators || 0), 0);
+          const totalFundingSecured = projectsArray.reduce((acc, proj) => acc + (proj.fundingGoal || 0), 0);
+  
+          setStats({
+            activeProjects: projectsArray.length,
+            collaborators: totalCollaborators,
+            fundingSecured: totalFundingSecured,
+            messages: 0, // You'll need to implement message tracking
+          });
+        }
+  
+        // Fetch user funding opportunities
+        const userFundingRef = ref(database, `users/${user.uid}/funding`);
+        const fundingSnapshot = await get(userFundingRef);
+  
+        if (fundingSnapshot.exists()) {
+          const fundingData = fundingSnapshot.val();
+          const fundingArray = Object.entries(fundingData).map(([id, data]) => ({
+            id,
+            ...data,
+          }));
+          setUserFunding(fundingArray);
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      }
+    };
+  
+    fetchUserData();
+  }, []);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -334,6 +385,73 @@ export default function DashboardPage() {
               <Button variant="outline">View All Projects</Button>
             </CardFooter>
           </Card>
+          {/* Funding Opportunities */}
+<Card>
+  <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <CardTitle>Funding Opportunities</CardTitle>
+      <CardDescription>Manage your posted funding opportunities</CardDescription>
+    </div>
+    <div className="flex items-center gap-2">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input type="search" placeholder="Search funding..." className="pl-8 w-[200px]" />
+      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm">
+            <Filter className="h-4 w-4 mr-2" />
+            Filter
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>Filter by</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem>Status</DropdownMenuItem>
+          <DropdownMenuItem>Date</DropdownMenuItem>
+          <DropdownMenuItem>Category</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button size="sm">
+        <Plus className="h-4 w-4 mr-2" />
+        New Funding
+      </Button>
+    </div>
+  </CardHeader>
+  <CardContent>
+    <div className="space-y-4">
+      {userFunding.map((funding) => (
+        <div
+          key={funding.id}
+          className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
+        >
+          <div className="space-y-1 mb-4 sm:mb-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium">{funding.title}</h3>
+              <Badge variant="secondary">{funding.category}</Badge>
+            </div>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex items-center">
+                <DollarSign className="h-3.5 w-3.5 mr-1" />
+                ${funding.amount}
+              </div>
+              <div className="flex items-center">
+                <Calendar className="h-3.5 w-3.5 mr-1" />
+                Deadline: {new Date(funding.deadline).toLocaleDateString()}
+              </div>
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" className="ml-auto">
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      ))}
+    </div>
+  </CardContent>
+  <CardFooter className="flex justify-center border-t p-4">
+    <Button variant="outline">View All Funding</Button>
+  </CardFooter>
+</Card>
 
           {/* Research Trends */}
           <ResearchTrends />
