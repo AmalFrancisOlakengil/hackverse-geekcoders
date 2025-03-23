@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import {
   Activity,
@@ -31,26 +31,81 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
 import { ResearchTrends } from "@/components/research-trends"
+import { auth, database } from "@/lib/firebase" // Import Firebase auth and database
+import { ref, get } from "firebase/database" // Import Firebase functions
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("overview")
+  const [userProjects, setUserProjects] = useState([])
+  const [stats, setStats] = useState({
+    activeProjects: 0,
+    collaborators: 0,
+    fundingSecured: 0,
+    messages: 0
+  })
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      try {
+        // Fetch user projects
+        const userProjectsRef = ref(database, `users/${user.uid}/projects`);
+        const projectsSnapshot = await get(userProjectsRef);
+
+        if (projectsSnapshot.exists()) {
+          const projectsData = projectsSnapshot.val();
+          const projectsArray = Object.entries(projectsData).map(([id, data]) => ({
+            id,
+            ...data,
+          }));
+          setUserProjects(projectsArray);
+
+          // Calculate stats
+          const totalCollaborators = projectsArray.reduce((acc, proj) => acc + (proj.numCollaborators || 0), 0);
+          const totalFundingSecured = projectsArray.reduce((acc, proj) => acc + (proj.fundingGoal || 0), 0);
+
+          setStats({
+            activeProjects: projectsArray.length,
+            collaborators: totalCollaborators,
+            fundingSecured: totalFundingSecured,
+            messages: 0 // You'll need to implement message tracking
+          });
+        }
+
+        // Fetch user funding opportunities (if needed)
+        const userFundingRef = ref(database, `users/${user.uid}/funding`);
+        const fundingSnapshot = await get(userFundingRef);
+
+        if (fundingSnapshot.exists()) {
+          const fundingData = fundingSnapshot.val();
+          console.log("User funding opportunities:", fundingData);
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   return (
     <div className="container py-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold font-heading">Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back, Dr. Johnson</p>
+          <p className="text-muted-foreground">Welcome back</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm">
             <Bell className="h-4 w-4 mr-2" />
             Notifications
           </Button>
-          <Button size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            New Project
-          </Button>
+          <Button>
+          <Plus className="h-4 w-4 mr-2" />
+          <Link href="/add-project">Start a New Project</Link>
+        </Button>
         </div>
       </div>
 
@@ -124,7 +179,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Active Projects</p>
-                    <p className="text-3xl font-bold">12</p>
+                    <p className="text-3xl font-bold">{stats.activeProjects}</p>
                   </div>
                   <div className="p-2 bg-primary/10 rounded-full text-primary">
                     <FileText className="h-5 w-5" />
@@ -142,7 +197,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Collaborators</p>
-                    <p className="text-3xl font-bold">28</p>
+                    <p className="text-3xl font-bold">{stats.collaborators}</p>
                   </div>
                   <div className="p-2 bg-secondary/10 rounded-full text-secondary">
                     <Users className="h-5 w-5" />
@@ -160,7 +215,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Funding Secured</p>
-                    <p className="text-3xl font-bold">$125K</p>
+                    <p className="text-3xl font-bold">${stats.fundingSecured}K</p>
                   </div>
                   <div className="p-2 bg-accent/10 rounded-full text-accent">
                     <DollarSign className="h-5 w-5" />
@@ -178,7 +233,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Messages</p>
-                    <p className="text-3xl font-bold">8</p>
+                    <p className="text-3xl font-bold">{stats.messages}</p>
                   </div>
                   <div className="p-2 bg-primary/10 rounded-full text-primary">
                     <MessageSquare className="h-5 w-5" />
@@ -226,38 +281,9 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {[
-                  {
-                    title: "Quantum Computing Applications in Healthcare",
-                    status: "In Progress",
-                    progress: 65,
-                    collaborators: 4,
-                    deadline: "Oct 15, 2023",
-                  },
-                  {
-                    title: "Blockchain for Secure Medical Records",
-                    status: "Planning",
-                    progress: 25,
-                    collaborators: 3,
-                    deadline: "Dec 1, 2023",
-                  },
-                  {
-                    title: "AI-Driven Climate Change Predictions",
-                    status: "Active",
-                    progress: 80,
-                    collaborators: 6,
-                    deadline: "Sep 30, 2023",
-                  },
-                  {
-                    title: "Renewable Energy Storage Solutions",
-                    status: "Review",
-                    progress: 90,
-                    collaborators: 5,
-                    deadline: "Aug 22, 2023",
-                  },
-                ].map((project, i) => (
+                {userProjects.map((project) => (
                   <div
-                    key={i}
+                    key={project.id}
                     className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
                   >
                     <div className="space-y-1 mb-4 sm:mb-0">
@@ -274,17 +300,17 @@ export default function DashboardPage() {
                                   : "default"
                           }
                         >
-                          {project.status}
+                          {project.status || "Active"}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center">
                           <Users className="h-3.5 w-3.5 mr-1" />
-                          {project.collaborators} collaborators
+                          {project.numCollaborators || 0} collaborators
                         </div>
                         <div className="flex items-center">
                           <Calendar className="h-3.5 w-3.5 mr-1" />
-                          Due {project.deadline}
+                          Created on {new Date(project.createdAt).toLocaleDateString()}
                         </div>
                       </div>
                     </div>
@@ -292,9 +318,9 @@ export default function DashboardPage() {
                       <div className="w-32">
                         <div className="flex justify-between text-xs mb-1">
                           <span>Progress</span>
-                          <span>{project.progress}%</span>
+                          <span>{project.progress || 0}%</span>
                         </div>
-                        <Progress value={project.progress} className="h-2" />
+                        <Progress value={project.progress || 0} className="h-2" />
                       </div>
                       <Button variant="ghost" size="sm" className="ml-auto">
                         <ChevronRight className="h-4 w-4" />
@@ -316,4 +342,3 @@ export default function DashboardPage() {
     </div>
   )
 }
-

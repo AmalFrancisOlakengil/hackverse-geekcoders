@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import Link from "next/link"
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Search,
   Filter,
@@ -20,15 +20,17 @@ import {
   Share2,
   Bookmark,
   Star,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { database } from "@/lib/firebase"; // Import Firebase database
+import { ref, get } from "firebase/database"; // Import Firebase functions
 
 const categories = [
   { name: "All Categories", icon: <Globe className="h-4 w-4" /> },
@@ -39,127 +41,96 @@ const categories = [
   { name: "Biotechnology", icon: <Beaker className="h-4 w-4" /> },
   { name: "Space Exploration", icon: <Rocket className="h-4 w-4" /> },
   { name: "Data Science", icon: <Database className="h-4 w-4" /> },
-]
-
-const projects = [
-  {
-    id: 1,
-    title: "AI-Powered Climate Change Prediction Models",
-    description:
-      "Developing machine learning algorithms to predict climate change impacts on regional ecosystems with higher accuracy.",
-    category: "Climate & Environment",
-    tags: ["AI", "Climate", "Prediction Models"],
-    collaborators: 8,
-    location: "Global",
-    author: {
-      name: "Dr. Emma Chen",
-      avatar: "/placeholder.svg?height=40&width=40",
-      institution: "Stanford University",
-    },
-    stars: 42,
-    comments: 15,
-  },
-  {
-    id: 2,
-    title: "Quantum Computing for Drug Discovery",
-    description:
-      "Using quantum algorithms to accelerate the discovery of novel pharmaceutical compounds for treating resistant diseases.",
-    category: "Healthcare",
-    tags: ["Quantum", "Pharma", "Drug Discovery"],
-    collaborators: 5,
-    location: "Europe",
-    author: {
-      name: "Prof. James Wilson",
-      avatar: "/placeholder.svg?height=40&width=40",
-      institution: "Oxford University",
-    },
-    stars: 38,
-    comments: 12,
-  },
-  {
-    id: 3,
-    title: "Blockchain for Secure Medical Records",
-    description:
-      "Implementing blockchain technology to ensure secure, transparent, and patient-controlled medical record systems.",
-    category: "Healthcare",
-    tags: ["Blockchain", "Security", "Medical Data"],
-    collaborators: 6,
-    location: "North America",
-    author: {
-      name: "Dr. Sarah Johnson",
-      avatar: "/placeholder.svg?height=40&width=40",
-      institution: "MIT",
-    },
-    stars: 29,
-    comments: 8,
-  },
-  {
-    id: 4,
-    title: "Sustainable Energy Storage Solutions",
-    description:
-      "Researching novel materials and methods for more efficient and environmentally friendly energy storage technologies.",
-    category: "Climate & Environment",
-    tags: ["Energy", "Sustainability", "Materials Science"],
-    collaborators: 10,
-    location: "Global",
-    author: {
-      name: "Dr. Michael Okonjo",
-      avatar: "/placeholder.svg?height=40&width=40",
-      institution: "ETH Zurich",
-    },
-    stars: 56,
-    comments: 23,
-  },
-  {
-    id: 5,
-    title: "Neural Interfaces for Paralysis Treatment",
-    description:
-      "Developing brain-computer interfaces to restore mobility and independence for individuals with paralysis.",
-    category: "Healthcare",
-    tags: ["Neuroscience", "BCI", "Medical Devices"],
-    collaborators: 7,
-    location: "Asia Pacific",
-    author: {
-      name: "Dr. Aisha Patel",
-      avatar: "/placeholder.svg?height=40&width=40",
-      institution: "National University of Singapore",
-    },
-    stars: 47,
-    comments: 19,
-  },
-  {
-    id: 6,
-    title: "Automated Biodiversity Monitoring Systems",
-    description:
-      "Creating AI-powered systems to track and analyze biodiversity changes in critical ecosystems worldwide.",
-    category: "Climate & Environment",
-    tags: ["Biodiversity", "AI", "Conservation"],
-    collaborators: 9,
-    location: "South America",
-    author: {
-      name: "Prof. Carlos Rodriguez",
-      avatar: "/placeholder.svg?height=40&width=40",
-      institution: "University of São Paulo",
-    },
-    stars: 33,
-    comments: 14,
-  },
-]
+];
 
 export default function ExplorePage() {
-  const [activeCategory, setActiveCategory] = useState("All Categories")
-  const [searchQuery, setSearchQuery] = useState("")
+  const [activeCategory, setActiveCategory] = useState("All Categories");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [projects, setProjects] = useState([]); // State to store fetched projects
+  const [loading, setLoading] = useState(true); // State to track loading status
+  const [sortBy, setSortBy] = useState("relevance"); // State for sorting
+  const [filters, setFilters] = useState({
+    openToCollaborators: false,
+    fundingAvailable: false,
+    seekingMentorship: false,
+    remoteCollaboration: false,
+  }); // State for filters
 
-  const filteredProjects = projects.filter((project) => {
-    const matchesCategory = activeCategory === "All Categories" || project.category === activeCategory
-    const matchesSearch =
-      searchQuery === "" ||
-      project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+  // Fetch all projects from Firebase
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const projectsRef = ref(database, "users"); // Reference to the "users" node
+        const snapshot = await get(projectsRef); // Fetch data
 
-    return matchesCategory && matchesSearch
-  })
+        if (snapshot.exists()) {
+          const users = snapshot.val(); // Get all users
+          const allProjects = [];
+
+          // Loop through each user and collect their projects
+          Object.keys(users).forEach((userId) => {
+            const userProjects = users[userId].projects; // Get projects for the current user
+            if (userProjects) {
+              Object.keys(userProjects).forEach((projectId) => {
+                const project = userProjects[projectId];
+                allProjects.push({
+                  id: projectId,
+                  userId,
+                  ...project, // Spread project data
+                });
+              });
+            }
+          });
+
+          console.log("All projects:", allProjects); // Debugging: Log all projects
+          setProjects(allProjects); // Set projects in state
+        } else {
+          console.log("No projects found in Firebase.");
+        }
+      } catch (error) {
+        console.error("Error fetching projects:", error);
+      } finally {
+        setLoading(false); // Set loading to false
+      }
+    };
+
+    fetchProjects();
+  }, []);
+
+  // Filter projects based on category, search query, and filters
+  const filteredProjects = projects
+    .filter((project) => {
+      const matchesCategory = activeCategory === "All Categories" || project.projectCategory === activeCategory;
+      const matchesSearch =
+        searchQuery === "" ||
+        project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        project.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        project.skillsRequired.some((skill) => skill.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      const matchesFilters =
+        (!filters.openToCollaborators || project.openToCollaborators) &&
+        (!filters.fundingAvailable || project.fundingAvailable) &&
+        (!filters.seekingMentorship || project.seekingMentorship) &&
+        (!filters.remoteCollaboration || project.remoteCollaboration);
+
+      return matchesCategory && matchesSearch && matchesFilters;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case "recent":
+          return new Date(b.createdAt) - new Date(a.createdAt); // Sort by most recent
+        case "popular":
+          return (b.stars || 0) - (a.stars || 0); // Sort by most stars
+        case "collaborators":
+          return (b.numCollaborators || 0) - (a.numCollaborators || 0); // Sort by most collaborators
+        default:
+          return 0; // Default: no sorting
+      }
+    });
+
+  if (loading) {
+    return <div className="container py-8 text-center">Loading projects...</div>;
+  }
 
   return (
     <div className="container py-8">
@@ -170,7 +141,7 @@ export default function ExplorePage() {
         </div>
         <Button>
           <BookOpen className="h-4 w-4 mr-2" />
-          Start a New Project
+          <Link href="/add-project">Start a New Project</Link>
         </Button>
       </div>
 
@@ -187,7 +158,7 @@ export default function ExplorePage() {
           />
         </div>
         <div className="flex gap-2">
-          <Select>
+          <Select value={sortBy} onValueChange={(value) => setSortBy(value)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Sort by: Relevance" />
             </SelectTrigger>
@@ -206,10 +177,50 @@ export default function ExplorePage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[200px]">
-              <DropdownMenuItem>Open to New Collaborators</DropdownMenuItem>
-              <DropdownMenuItem>Funding Available</DropdownMenuItem>
-              <DropdownMenuItem>Seeking Mentorship</DropdownMenuItem>
-              <DropdownMenuItem>Remote Collaboration</DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => setFilters((prev) => ({ ...prev, openToCollaborators: !prev.openToCollaborators }))}
+              >
+                <input
+                  type="checkbox"
+                  checked={filters.openToCollaborators}
+                  onChange={() => {}}
+                  className="mr-2"
+                />
+                Open to New Collaborators
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => setFilters((prev) => ({ ...prev, fundingAvailable: !prev.fundingAvailable }))}
+              >
+                <input
+                  type="checkbox"
+                  checked={filters.fundingAvailable}
+                  onChange={() => {}}
+                  className="mr-2"
+                />
+                Funding Available
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => setFilters((prev) => ({ ...prev, seekingMentorship: !prev.seekingMentorship }))}
+              >
+                <input
+                  type="checkbox"
+                  checked={filters.seekingMentorship}
+                  onChange={() => {}}
+                  className="mr-2"
+                />
+                Seeking Mentorship
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => setFilters((prev) => ({ ...prev, remoteCollaboration: !prev.remoteCollaboration }))}
+              >
+                <input
+                  type="checkbox"
+                  checked={filters.remoteCollaboration}
+                  onChange={() => {}}
+                  className="mr-2"
+                />
+                Remote Collaboration
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -256,7 +267,7 @@ export default function ExplorePage() {
                     <CardHeader className="pb-2">
                       <div className="flex justify-between items-start">
                         <Badge variant="outline" className="mb-2">
-                          {project.category}
+                          {project.projectCategory}
                         </Badge>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -285,45 +296,45 @@ export default function ExplorePage() {
                     </CardHeader>
                     <CardContent className="pb-2">
                       <div className="flex flex-wrap gap-2 mb-4">
-                        {project.tags.map((tag) => (
-                          <Badge key={tag} variant="secondary" className="bg-secondary/20">
-                            {tag}
+                        {project.skillsRequired.map((skill) => (
+                          <Badge key={skill} variant="secondary" className="bg-secondary/20">
+                            {skill}
                           </Badge>
                         ))}
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center">
                           <Users className="h-4 w-4 mr-1 text-muted-foreground" />
-                          <span className="text-muted-foreground">{project.collaborators} collaborators</span>
+                          <span className="text-muted-foreground">{project.numCollaborators} collaborators</span>
                         </div>
                         <div className="flex items-center">
                           <Globe className="h-4 w-4 mr-1 text-muted-foreground" />
-                          <span className="text-muted-foreground">{project.location}</span>
+                          <span className="text-muted-foreground">{project.location || "Unknown"}</span>
                         </div>
                       </div>
                     </CardContent>
                     <CardFooter className="border-t pt-4 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={project.author.avatar} alt={project.author.name} />
-                          <AvatarFallback>{project.author.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div className="text-sm">
-                          <p className="font-medium">{project.author.name}</p>
-                          <p className="text-xs text-muted-foreground">{project.author.institution}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Button variant="ghost" size="sm" className="h-8 gap-1">
-                          <Star className="h-4 w-4" />
-                          <span>{project.stars}</span>
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-8 gap-1">
-                          <MessageSquare className="h-4 w-4" />
-                          <span>{project.comments}</span>
-                        </Button>
-                      </div>
-                    </CardFooter>
+  <div className="flex items-center gap-2">
+    <Avatar className="h-8 w-8">
+      <AvatarImage src={project.author?.avatar} alt={project.author?.name} />
+      <AvatarFallback>{project.author?.name?.charAt(0)}</AvatarFallback>
+    </Avatar>
+    <div className="text-sm">
+      <p className="font-medium">{project.author?.name || "Unknown"}</p>
+      <p className="text-xs text-muted-foreground">{project.author?.institution || ""}</p>
+    </div>
+  </div>
+  <div className="flex items-center gap-3">
+    <Button variant="ghost" size="sm" className="h-8 gap-1">
+      <Star className="h-4 w-4" />
+      <span>{project.likes || 0}</span> {/* Display likes */}
+    </Button>
+    <Button variant="ghost" size="sm" className="h-8 gap-1">
+      <MessageSquare className="h-4 w-4" />
+      <span>{project.comments || 0}</span> {/* Display comments */}
+    </Button>
+  </div>
+</CardFooter>
                   </Card>
                 ))}
               </div>
@@ -337,11 +348,11 @@ export default function ExplorePage() {
                       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline">{project.category}</Badge>
+                            <Badge variant="outline">{project.projectCategory}</Badge>
                             <div className="flex gap-1">
-                              {project.tags.map((tag) => (
-                                <Badge key={tag} variant="secondary" className="bg-secondary/20">
-                                  {tag}
+                              {project.skillsRequired.map((skill) => (
+                                <Badge key={skill} variant="secondary" className="bg-secondary/20">
+                                  {skill}
                                 </Badge>
                               ))}
                             </div>
@@ -355,33 +366,33 @@ export default function ExplorePage() {
                           <div className="flex items-center gap-4 text-sm">
                             <div className="flex items-center">
                               <Users className="h-4 w-4 mr-1 text-muted-foreground" />
-                              <span className="text-muted-foreground">{project.collaborators} collaborators</span>
+                              <span className="text-muted-foreground">{project.numCollaborators} collaborators</span>
                             </div>
                             <div className="flex items-center">
                               <Globe className="h-4 w-4 mr-1 text-muted-foreground" />
-                              <span className="text-muted-foreground">{project.location}</span>
+                              <span className="text-muted-foreground">{project.location || "Unknown"}</span>
                             </div>
                           </div>
                         </div>
                         <div className="flex flex-row md:flex-col items-center md:items-end gap-4 md:min-w-[180px]">
                           <div className="flex items-center gap-2">
                             <Avatar className="h-8 w-8">
-                              <AvatarImage src={project.author.avatar} alt={project.author.name} />
-                              <AvatarFallback>{project.author.name.charAt(0)}</AvatarFallback>
+                              <AvatarImage src={project.author?.avatar} alt={project.author?.name} />
+                              <AvatarFallback>{project.author?.name?.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <div className="text-sm">
-                              <p className="font-medium">{project.author.name}</p>
-                              <p className="text-xs text-muted-foreground">{project.author.institution}</p>
+                              <p className="font-medium">{project.author?.name || "Unknown"}</p>
+                              <p className="text-xs text-muted-foreground">{project.author?.institution || ""}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <Button variant="ghost" size="sm" className="h-8 gap-1">
                               <Star className="h-4 w-4" />
-                              <span>{project.stars}</span>
+                              <span>{project.stars || 0}</span>
                             </Button>
                             <Button variant="ghost" size="sm" className="h-8 gap-1">
                               <MessageSquare className="h-4 w-4" />
-                              <span>{project.comments}</span>
+                              <span>{project.comments || 0}</span>
                             </Button>
                             <Button variant="outline" size="sm">
                               View
@@ -403,8 +414,14 @@ export default function ExplorePage() {
                 variant="outline"
                 className="mt-4"
                 onClick={() => {
-                  setActiveCategory("All Categories")
-                  setSearchQuery("")
+                  setActiveCategory("All Categories");
+                  setSearchQuery("");
+                  setFilters({
+                    openToCollaborators: false,
+                    fundingAvailable: false,
+                    seekingMentorship: false,
+                    remoteCollaboration: false,
+                  });
                 }}
               >
                 Clear Filters
@@ -420,6 +437,5 @@ export default function ExplorePage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
-

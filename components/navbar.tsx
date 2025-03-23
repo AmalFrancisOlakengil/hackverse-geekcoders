@@ -1,15 +1,28 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { Menu, X, Search, Bell, MessageSquare } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { cn } from "@/lib/utils"
-import { useMobile } from "@/hooks/use-mobile"
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Menu, X, Search, Bell, MessageSquare } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
+import { useMobile } from "@/hooks/use-mobile";
+import { auth, signInWithGoogle, logout } from "@/lib/firebase";
+import { ethers } from "ethers"; // Updated import for ethers.js v6
+
+const getCurrentUserId = () => {
+  const user = auth.currentUser; // Get the currently signed-in user
+  if (user) {
+    const userId = user.uid; // Get the userId
+    console.log("Current User ID:", userId);
+    return userId;
+  } else {
+    console.log("No user is signed in.");
+    return null;
+  }
+};
 
 const navLinks = [
   { name: "Home", href: "/" },
@@ -17,26 +30,59 @@ const navLinks = [
   { name: "Funding", href: "/funding" },
   { name: "Mentorship", href: "/mentorship" },
   { name: "Research Hub", href: "/research" },
-]
+];
 
 export function Navbar() {
-  const [isScrolled, setIsScrolled] = useState(false)
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const pathname = usePathname()
-  const isMobile = useMobile()
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [user, setUser] = useState(null);
+  const [walletAddress, setWalletAddress] = useState(""); // State to store the wallet address
+  const pathname = usePathname();
+  const isMobile = useMobile();
 
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10)
-    }
-    window.addEventListener("scroll", handleScroll)
-    return () => window.removeEventListener("scroll", handleScroll)
-  }, [])
+      setIsScrolled(window.scrollY > 10);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     // Close mobile menu when route changes
-    setIsMenuOpen(false)
-  }, [pathname])
+    setIsMenuOpen(false);
+  }, [pathname]);
+
+  // Listen to Firebase authentication state
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Function to connect to MetaMask
+  const connectMetaMask = async () => {
+    if (typeof window.ethereum !== "undefined") {
+      try {
+        // Request account access
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        const provider = new ethers.BrowserProvider(window.ethereum); // Updated for ethers.js v6
+        const signer = await provider.getSigner();
+        const address = await signer.getAddress();
+        setWalletAddress(address); // Set the wallet address
+        console.log("Connected to MetaMask:", address);
+
+        // Optionally, you can save the wallet address to Firebase or your backend
+        // Example: saveWalletAddressToFirebase(user.uid, address);
+      } catch (error) {
+        console.error("Error connecting to MetaMask:", error);
+      }
+    } else {
+      console.error("MetaMask is not installed!");
+      alert("Please install MetaMask to connect your wallet.");
+    }
+  };
 
   return (
     <header
@@ -73,48 +119,40 @@ export function Navbar() {
 
         {/* Right side actions */}
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="hidden md:flex">
-            <Search className="h-5 w-5" />
-            <span className="sr-only">Search</span>
-          </Button>
-
-          <div className="hidden md:flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-[#F59E0B]" />
-              <span className="sr-only">Notifications</span>
+          {/* MetaMask Wallet Button */}
+          {walletAddress ? (
+            <Button variant="outline" size="sm" disabled>
+              {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
             </Button>
-
-            <Button variant="ghost" size="icon">
-              <MessageSquare className="h-5 w-5" />
-              <span className="sr-only">Messages</span>
+          ) : (
+            <Button variant="outline" size="sm" onClick={connectMetaMask}>
+              Add MetaMask Wallet
             </Button>
+          )}
 
-            <ThemeToggle />
-
+          {!user ? (
+            <Button onClick={signInWithGoogle}>Sign in with Google</Button>
+          ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src="/placeholder.svg?height=32&width=32" alt="User" />
-                    <AvatarFallback>JD</AvatarFallback>
+                    <AvatarImage src={user.photoURL || "/placeholder.svg?height=32&width=32"} alt="User" />
+                    <AvatarFallback>{user.displayName ? user.displayName[0] : "U"}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild>
-                  <Link href="/profile">Profile</Link>
-                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/dashboard">Dashboard</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/settings">Settings</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>Sign out</DropdownMenuItem>
+                <DropdownMenuItem onClick={logout}>Sign out</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
+          )}
 
           {/* Mobile menu button */}
           <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)}>
@@ -140,26 +178,9 @@ export function Navbar() {
                 {link.name}
               </Link>
             ))}
-            <div className="h-px bg-border my-2" />
-            <div className="flex items-center justify-between px-4 py-2">
-              <ThemeToggle />
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon">
-                  <Bell className="h-5 w-5" />
-                </Button>
-                <Button variant="ghost" size="icon">
-                  <MessageSquare className="h-5 w-5" />
-                </Button>
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src="/placeholder.svg?height=32&width=32" alt="User" />
-                  <AvatarFallback>JD</AvatarFallback>
-                </Avatar>
-              </div>
-            </div>
           </nav>
         </div>
       )}
     </header>
-  )
+  );
 }
-

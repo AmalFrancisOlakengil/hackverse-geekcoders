@@ -1,3 +1,8 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { database } from "@/lib/firebase"
+import { ref, get, query, orderByChild } from "firebase/database"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,6 +25,43 @@ import {
 } from "lucide-react"
 
 export default function MentorshipPage() {
+  const [mentors, setMentors] = useState([])
+  const [programs, setPrograms] = useState([])
+
+  useEffect(() => {
+    const fetchMentorshipData = async () => {
+      try {
+        // Fetch all projects where seekingMentorship is true
+        const projectsRef = ref(database, 'users');
+        const snapshot = await get(projectsRef);
+
+        if (snapshot.exists()) {
+          const mentorshipProjects = [];
+          snapshot.forEach((userSnapshot) => {
+            const userData = userSnapshot.val();
+            if (userData.projects) {
+              Object.entries(userData.projects).forEach(([projectId, projectData]) => {
+                if (projectData.seekingMentorship) {
+                  mentorshipProjects.push({
+                    id: projectId,
+                    userId: userSnapshot.key,
+                    ...projectData
+                  });
+                }
+              });
+            }
+          });
+
+          setPrograms(mentorshipProjects);
+        }
+      } catch (error) {
+        console.error("Error fetching mentorship data:", error);
+      }
+    };
+
+    fetchMentorshipData();
+  }, []);
+
   return (
     <div className="container py-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
@@ -146,49 +188,15 @@ export default function MentorshipPage() {
           <div className="mt-12">
             <h2 className="text-2xl font-bold font-heading mb-4">Featured Mentorship Programs</h2>
             <div className="space-y-4">
-              {[
-                {
-                  title: "Women in STEM Leadership Program",
-                  organizer: "Global Science Foundation",
-                  duration: "6 months",
-                  startDate: "April 1, 2024",
-                  description:
-                    "Mentorship and leadership development for women in science, technology, engineering, and mathematics.",
-                  tags: ["Women in STEM", "Leadership", "Career Development"],
-                  mentors: 12,
-                  spots: "20 spots available",
-                },
-                {
-                  title: "Early Career Researcher Accelerator",
-                  organizer: "International Research Alliance",
-                  duration: "12 months",
-                  startDate: "May 15, 2024",
-                  description:
-                    "Comprehensive mentorship program for PhD students and postdocs to accelerate research impact.",
-                  tags: ["Early Career", "Research Skills", "Publication Strategy"],
-                  mentors: 25,
-                  spots: "50 spots available",
-                },
-                {
-                  title: "Research to Industry Bridge Program",
-                  organizer: "TechTransfer Consortium",
-                  duration: "9 months",
-                  startDate: "June 1, 2024",
-                  description:
-                    "Mentorship for researchers looking to commercialize their innovations or transition to industry.",
-                  tags: ["Commercialization", "Entrepreneurship", "Industry"],
-                  mentors: 18,
-                  spots: "30 spots available",
-                },
-              ].map((program, i) => (
-                <Card key={i} className="overflow-hidden">
+              {programs.map((program) => (
+                <Card key={program.id} className="overflow-hidden">
                   <div className="p-6">
                     <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                       <div className="space-y-2">
                         <h3 className="text-lg font-semibold">{program.title}</h3>
                         <p className="text-sm text-muted-foreground">{program.description}</p>
                         <div className="flex flex-wrap gap-2 my-2">
-                          {program.tags.map((tag) => (
+                          {program.tags && program.tags.map((tag) => (
                             <Badge key={tag} variant="secondary" className="bg-secondary/20">
                               {tag}
                             </Badge>
